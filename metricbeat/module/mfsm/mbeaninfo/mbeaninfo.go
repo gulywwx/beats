@@ -62,7 +62,7 @@ func (m *MetricSet) Fetch(reporter mb.ReporterV2) error {
 		return errors.Wrap(err, "error fetching status")
 	}
 
-	data, _ := eventMapping(&content)
+	data, _ := eventMapping(&content, m.Host())
 
 	if reported := reporter.Event(mb.Event{MetricSetFields: data}); !reported {
 		m.Logger().Error("error reporting event")

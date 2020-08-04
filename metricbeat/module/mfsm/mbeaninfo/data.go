@@ -14,6 +14,7 @@ import (
 
 var (
 	schema = s.Schema{
+		"HostName":            c.Str("HostName"),
 		"State":               c.Str("State"),
 		"AcceptNewConnection": c.Bool("AcceptNewConnection"),
 		"QuiescedStatusCode":  c.Str("QuiescedStatusCode"),
@@ -26,7 +27,7 @@ var (
 	}
 )
 
-func eventMapping(content *[]byte) (common.MapStr, error) {
+func eventMapping(content *[]byte, hostname string) (common.MapStr, error) {
 	row := []string{}
 	z := html.NewTokenizer(bytes.NewReader(*content))
 
@@ -52,6 +53,8 @@ func eventMapping(content *[]byte) (common.MapStr, error) {
 			fullEvent[s] = row[i+4]
 		}
 	}
+
+	fullEvent["HostName"] = hostname
 
 	fields, err := schema.Apply(fullEvent)
 	if err != nil {
