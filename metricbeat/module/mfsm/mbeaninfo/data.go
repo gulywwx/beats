@@ -46,6 +46,10 @@ func eventMapping(content *[]byte, hostname string) (common.MapStr, error) {
 		}
 	}
 
+	if len(row) == 0 {
+		return nil, errors.New("error parse html")
+	}
+
 	fullEvent := map[string]interface{}{}
 	for i, s := range row {
 
