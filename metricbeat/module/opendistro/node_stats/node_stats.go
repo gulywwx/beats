@@ -50,8 +50,13 @@ func (m *MetricSet) Fetch(report mb.ReporterV2) error {
 	if err != nil {
 		return err
 	}
+	err = eventsMapping(report, m, *info, content)
+	if err != nil {
+		m.Logger().Error(err)
+		return nil
+	}
+	return nil
 
-	return eventsMapping(report, m, *info, content)
 }
 
 func (m *MetricSet) updateServiceURI() error {

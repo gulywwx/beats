@@ -2,12 +2,13 @@ package opendistro
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/elastic/beats/v7/libbeat/common"
 	"github.com/elastic/beats/v7/metricbeat/helper"
+	"github.com/pkg/errors"
 )
 
 const ModuleName = "opendistro"
@@ -140,4 +141,98 @@ func IsMLockAllEnabled(http *helper.HTTP, resetURI, nodeID string) (bool, error)
 	}
 
 	return false, fmt.Errorf("could not determine if mlockall is enabled on node ID = %v", nodeID)
+}
+
+// GetClusterSettingsWithDefaults returns cluster settings.
+func GetClusterSettingsWithDefaults(http *helper.HTTP, resetURI string, filterPaths []string) (common.MapStr, error) {
+	return GetClusterSettings(http, resetURI, true, filterPaths)
+}
+
+// GetClusterSettings returns cluster settings
+func GetClusterSettings(http *helper.HTTP, resetURI string, includeDefaults bool, filterPaths []string) (common.MapStr, error) {
+	clusterSettingsURI := "_cluster/settings"
+	var queryParams []string
+	if includeDefaults {
+		queryParams = append(queryParams, "include_defaults=true")
+	}
+
+	if filterPaths != nil && len(filterPaths) > 0 {
+		filterPathQueryParam := "filter_path=" + strings.Join(filterPaths, ",")
+		queryParams = append(queryParams, filterPathQueryParam)
+	}
+
+	queryString := strings.Join(queryParams, "&")
+
+	content, err := fetchPath(http, resetURI, clusterSettingsURI, queryString)
+	if err != nil {
+		return nil, err
+	}
+
+	var clusterSettings map[string]interface{}
+	err = json.Unmarshal(content, &clusterSettings)
+	return clusterSettings, err
+}
+
+// MergeClusterSettings merges cluster settings in the correct precedence order
+func MergeClusterSettings(clusterSettings common.MapStr) (common.MapStr, error) {
+	transientSettings, err := getSettingGroup(clusterSettings, "transient")
+	if err != nil {
+		return nil, err
+	}
+
+	persistentSettings, err := getSettingGroup(clusterSettings, "persistent")
+	if err != nil {
+		return nil, err
+	}
+
+	settings, err := getSettingGroup(clusterSettings, "default")
+	if err != nil {
+		return nil, err
+	}
+
+	// Transient settings override persistent settings which override default settings
+	if settings == nil {
+		settings = persistentSettings
+	}
+
+	if settings == nil {
+		settings = transientSettings
+	}
+
+	if settings == nil {
+		return nil, nil
+	}
+
+	if persistentSettings != nil {
+		settings.DeepUpdate(persistentSettings)
+	}
+
+	if transientSettings != nil {
+		settings.DeepUpdate(transientSettings)
+	}
+
+	return settings, nil
+}
+
+func getSettingGroup(allSettings common.MapStr, groupKey string) (common.MapStr, error) {
+	hasSettingGroup, err := allSettings.HasKey(groupKey)
+	if err != nil {
+		return nil, errors.Wrap(err, "failure to determine if "+groupKey+" settings exist")
+	}
+
+	if !hasSettingGroup {
+		return nil, nil
+	}
+
+	settings, err := allSettings.GetValue(groupKey)
+	if err != nil {
+		return nil, errors.Wrap(err, "failure to extract "+groupKey+" settings")
+	}
+
+	v, ok := settings.(map[string]interface{})
+	if !ok {
+		return nil, errors.Wrap(err, groupKey+" settings are not a map")
+	}
+
+	return common.MapStr(v), nil
 }

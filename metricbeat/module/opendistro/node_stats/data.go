@@ -216,6 +216,7 @@ func eventsMapping(r mb.ReporterV2, m *MetricSet, info opendistro.Info, content 
 			"node_stats":   nodeData,
 			"source_node":  sourceNode,
 		}
+		event.RootFields.Put("service.name", opendistro.ModuleName)
 
 		r.Event(event)
 	}
